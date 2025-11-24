@@ -147,7 +147,7 @@ This is **not mandatory** but **highly valued** as it demonstrates your ability 
 
 # 📬 Submission Instructions
 
-Please submit your **GitHub repository link** via email.
+Please submit your **GitHub repository link** via email to: **backoffice@flinters.vn**
 
 Your repository should include:
 - Source code
