@@ -99,14 +99,16 @@ Output as CSV format. Exclude campaigns with zero conversions.
 ## 3. Technical Requirements
 
 - The file is large (~1GB).  
-  **You must NOT load the entire file into memory at once.**
+   **Your solution must handle large datasets efficiently with good performance and memory optimization.**
 - The program should be runnable via CLI, for example: `python aggregator.py --input ad_data.csv --output results/`
 
 ---
 
-# Expected Submission
+# 📬 Submission Instructions
 
-Please submit the following:
+Please submit your **GitHub repository link** via email to: **backoffice@flinters.vn**
+
+Your repository should include:
 
 1. **Source code** in a GitHub repository  
 2. Output result files:
@@ -122,10 +124,12 @@ Please submit the following:
    - Dockerfile  
    - Unit tests  
    - Benchmark logs  
+5. **(If used) AI assistant prompt messages/documentation**
+   - e.g., `PROMPTS.md`, commit messages, or `prompts/` directory
 
 ---
 
-# 🤖 AI Coding Assistants
+## 🤖 AI Coding Assistants
 
 **We encourage you to use AI coding assistants** such as GitHub Copilot, Claude (Cursor AI, Cline), ChatGPT, or any other AI tools you prefer!
 
@@ -142,18 +146,6 @@ You can document your prompts by:
 - Any other format that clearly shows your AI interaction
 
 This is **not mandatory** but **highly valued** as it demonstrates your ability to effectively leverage modern development tools.
-
----
-
-# 📬 Submission Instructions
-
-Please submit your **GitHub repository link** via email to: **backoffice@flinters.vn**
-
-Your repository should include:
-- Source code
-- Output files (`top10_ctr.csv`, `top10_cpa.csv`)
-- README.md with setup instructions, how to run, libraries used, processing time, and peak memory usage
-- **(If used)** AI assistant prompt messages/documentation (e.g., `PROMPTS.md`, commit messages, or `prompts/` directory)
 
 ---
 
