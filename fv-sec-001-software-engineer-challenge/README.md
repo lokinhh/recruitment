@@ -122,10 +122,22 @@ Your repository should include:
    - Peak memory usage (if measured)
 4. *(Optional but recommended)*  
    - Dockerfile  
-   - Unit tests  
    - Benchmark logs  
-5. **(If used) AI assistant prompt messages/documentation**
-   - e.g., `PROMPTS.md`, commit messages, or `prompts/` directory
+5. **(If used) `PROMPTS.md`** — see [AI Coding Assistants](#-ai-coding-assistants) section below
+
+---
+
+## ✅ Code Quality Expectations
+
+Please write your code carefully. We expect:
+
+- **Correct results** — output must match expected values precisely
+- **Clean, readable code** — meaningful names, consistent style, no dead code or commented-out blocks
+- **Error handling** — handle missing files, malformed rows, and edge cases gracefully
+- **Performance awareness** — the input is ~1GB; your solution must be memory-efficient
+- **Tests** — include tests to verify your solution's correctness
+- **Documented decisions** — briefly explain non-obvious choices in your README
+
 
 ---
 
@@ -134,16 +146,15 @@ Your repository should include:
 **We encourage you to use AI coding assistants** such as GitHub Copilot, Claude (Cursor AI, Cline), ChatGPT, or any other AI tools you prefer!
 
 ### **If you use AI coding assistants:**
-Please include your **prompt messages** in your submission. This helps us understand:
+Please include a **`PROMPTS.md`** file in the root of your repository. This helps us understand:
 - How you break down problems
 - Your communication with AI tools
 - Your problem-solving approach
 
-You can document your prompts by:
-- Creating a `PROMPTS.md` file in your repository
-- Adding prompt messages as commit messages
-- Including a `prompts/` directory with your conversation history
-- Any other format that clearly shows your AI interaction
+**Requirements for `PROMPTS.md`:**
+- Must be a file named exactly `PROMPTS.md` (no other format accepted)
+- Paste your prompts **as-is** — raw, unedited, exactly as you typed them
+- Do **not** clean up, polish, or rewrite your prompts before submitting
 
 This is **not mandatory** but **highly valued** as it demonstrates your ability to effectively leverage modern development tools.
 
