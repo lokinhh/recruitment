@@ -1,34 +1,34 @@
 # FV-SEC001 - Ad Performance Aggregator (Go)
 
-CLI application để xử lý file `ad_data.csv` ~1GB, aggregate theo `campaign_id`, và xuất:
+CLI application to process a ~1GB `ad_data.csv`, aggregate by `campaign_id`, and output:
 
-- `top10_ctr.csv`: top 10 campaign có CTR cao nhất
-- `top10_cpa.csv`: top 10 campaign có CPA thấp nhất (loại campaign có conversions = 0)
+- `top10_ctr.csv`: top 10 campaigns with the highest CTR
+- `top10_cpa.csv`: top 10 campaigns with the lowest CPA (excluding campaigns with `conversions = 0`)
 
 ## Setup
 
-Yêu cầu:
+Requirements:
 
 - Go 1.25+
-- Dataset tại `ad_data_csv/ad_data.csv` (kích thước thực tế khoảng 995MB)
+- Dataset at `ad_data_csv/ad_data.csv` (actual file size is about 995MB)
 
 ## How To Run
 
-Chạy mặc định (đọc `../ad_data_csv/ad_data.csv` khi đứng trong `src`):
+Run with default input (reads `../ad_data_csv/ad_data.csv` when running from `src`):
 
 ```bash
 cd src
 go run .
 ```
 
-Chạy chỉ định input/output:
+Run with custom input/output:
 
 ```bash
 cd src
 go run . -input ../ad_data_csv/ad_data.csv -output ./results
 ```
 
-Chạy benchmark nhiều lần (có warm-up):
+Run benchmark multiple times (with warm-up):
 
 ```bash
 cd src
@@ -37,14 +37,14 @@ go run . -runs=10 -warmup=10
 
 ## Output Files
 
-Kết quả được ghi ra:
+Generated output files:
 
 - `src/results/top10_ctr.csv`
 - `src/results/top10_cpa.csv`
 
 ## Libraries Used
 
-Chỉ dùng Go standard library:
+Only Go standard library is used:
 
 - `encoding/csv`
 - `flag`
@@ -54,33 +54,33 @@ Chỉ dùng Go standard library:
 
 ## Processing Strategy
 
-Luồng xử lý chính:
+Main processing flow:
 
-1. Đọc file CSV theo streaming (line by line), không load toàn bộ file vào memory.
-2. Parse từng record và chuẩn hóa số liệu ngay lúc đọc.
-3. Aggregate trực tiếp vào map theo `campaign_id` trong lúc parsing.
-4. Sau khi đọc xong mới tính CTR/CPA và lấy top 10.
-5. Ghi CSV output.
+1. Stream-read the CSV file line by line without loading the full file into memory.
+2. Parse each record and normalize values on the fly.
+3. Aggregate directly into campaign-level state during parsing.
+4. After reading finishes, compute CTR/CPA and select top 10.
+5. Write CSV outputs.
 
-## Bottleneck Và Quyết Định Tối Ưu
+## Bottleneck And Optimization Decisions
 
-Bottleneck lớn nhất của bài toán là **đọc + parse file CSV dung lượng lớn**.  
-Nếu parse xong mới gom nhóm ở một pass khác thì sẽ tốn thêm CPU cycles và tăng memory pressure do phải giữ dữ liệu trung gian.
+The biggest bottleneck in this problem is **reading and parsing a large CSV file**.  
+If parsing and aggregation are separated into multiple passes, CPU cycles increase and memory pressure grows because intermediate records must be retained.
 
-Vì vậy mình chọn:
+Therefore, this implementation uses:
 
-- **Đọc file nhanh bằng memory-mapped I/O (`mmap`)** để giảm overhead syscall/read loop so với đọc từng chunk nhỏ.
-- **Chia dữ liệu theo chunk và parse song song theo số core** (`workers ~= GOMAXPROCS`), mỗi worker xử lý một vùng byte độc lập theo ranh giới dòng.
-- **Parsing nhanh theo byte-level scanner** (`parseLineToCompactTrusted`) thay vì parser CSV tổng quát, vì input format cố định và sạch.
-- **Lưu tiền ở đơn vị cents (`int64`)** để tránh chi phí float khi parse và cộng dồn.
-- **Aggregate ngay trong lúc parsing** (single pass), không tạo slice record trung gian.
-- **Dùng local aggregator per worker rồi merge cuối** để giảm contention/lock trong hot path.
+- **Fast file access with memory-mapped I/O (`mmap`)** to reduce syscall/read-loop overhead.
+- **Chunked parallel parsing across CPU cores** (`workers ~= GOMAXPROCS`), where each worker handles an independent byte range aligned to line boundaries.
+- **Byte-level parsing** (`parseLineToCompactTrusted`) instead of a generic CSV parser, since the input format is fixed and trusted.
+- **Money stored as cents (`int64`)** to avoid float overhead during parsing and accumulation.
+- **Single-pass aggregation during parsing**, without creating an intermediate record slice.
+- **Local aggregator per worker, then final merge** to reduce contention/locking on the hot path.
 
-Lợi ích:
+Benefits:
 
-- Tăng throughput đọc + parse trên file lớn.
-- Giảm CPU cycles do bỏ bớt lớp parse/convert dư thừa.
-- Giảm allocation, giảm GC pressure, giữ peak memory thấp.
+- Higher read+parse throughput on large files.
+- Lower CPU cycle cost by removing unnecessary parse/convert layers.
+- Fewer allocations, lower GC pressure, and lower peak memory.
 
 ## Benchmark Report (1GB dataset)
 
@@ -106,5 +106,5 @@ Measured result:
 
 ## Notes
 
-- App có log benchmark chi tiết theo từng run và summary cuối.
-- Có thể thay đổi `-runs`/`-warmup` để lấy số đo ổn định hơn tùy môi trường máy.
+- The app prints detailed per-run benchmark logs and a final summary.
+- You can tune `-runs` and `-warmup` for more stable measurements on your machine.
