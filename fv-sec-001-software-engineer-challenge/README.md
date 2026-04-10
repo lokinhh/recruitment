@@ -1,163 +1,110 @@
-# FV-SEC001 - Software Engineer Challenge — Ad Performance Aggregator
+# FV-SEC001 - Ad Performance Aggregator (Go)
 
-## Introduction
-This is a data processing challenge for Developer candidates applying to our company.  
-You will work with a large CSV dataset (~1GB) containing advertising performance records.
+CLI application để xử lý file `ad_data.csv` ~1GB, aggregate theo `campaign_id`, và xuất:
 
-The goal is to evaluate your ability to write clean code, handle large datasets efficiently, optimize performance/memory usage, and design a robust data-processing workflow.
+- `top10_ctr.csv`: top 10 campaign có CTR cao nhất
+- `top10_cpa.csv`: top 10 campaign có CPA thấp nhất (loại campaign có conversions = 0)
 
----
+## Setup
 
-## Input Data
+Yêu cầu:
 
-### Download the Dataset
+- Go 1.25+
+- Dataset tại `ad_data_csv/ad_data.csv` (kích thước thực tế khoảng 995MB)
 
-1. Download the `ad_data.csv.zip` file from this repository folder
-2. Unzip it to get the `ad_data.csv` file (~1GB)
-3. Use this CSV file for your solution
+## How To Run
+
+Chạy mặc định (đọc `../ad_data_csv/ad_data.csv` khi đứng trong `src`):
 
 ```bash
-# Example: Unzip the file
-unzip ad_data.csv.zip
+cd src
+go run .
 ```
 
-### CSV Schema
+Chạy chỉ định input/output:
 
-| Column         | Type      | Description |
-|----------------|-----------|-------------|
-| campaign_id    | string    | Campaign ID |
-| date           | string    | Date in `YYYY-MM-DD` format |
-| impressions    | integer   | Number of impressions |
-| clicks         | integer   | Number of clicks |
-| spend          | float     | Advertising cost (USD) |
-| conversions    | integer   | Number of conversions |
+```bash
+cd src
+go run . -input ../ad_data_csv/ad_data.csv -output ./results
+```
 
-### Example:
+Chạy benchmark nhiều lần (có warm-up):
 
-| campaign_id | date       | impressions | clicks | spend | conversions |
-|-------------|------------|-------------|--------|-------|-------------|
-| CMP001      | 2025-01-01 | 12000       | 300    | 45.50 | 12          |
-| CMP002      | 2025-01-01 | 8000        | 120    | 28.00 | 4           |
-| CMP001      | 2025-01-02 | 14000       | 340    | 48.20 | 15          |
-| CMP003      | 2025-01-01 | 5000        | 60     | 15.00 | 3           |
-| CMP002      | 2025-01-02 | 8500        | 150    | 31.00 | 5           |
+```bash
+cd src
+go run . -runs=10 -warmup=10
+```
 
----
+## Output Files
 
-# 🎯 Task Requirements
+Kết quả được ghi ra:
 
-You must build a **console application (CLI)** in any programming language (Python, NodeJS, Go, Java, Rust, etc.) that processes the CSV file and produces aggregated analytics.
+- `src/results/top10_ctr.csv`
+- `src/results/top10_cpa.csv`
 
----
+## Libraries Used
 
-## 1. Aggregate data by `campaign_id`
+Chỉ dùng Go standard library:
 
-For each `campaign_id`, compute:
+- `encoding/csv`
+- `flag`
+- `os`, `filepath`
+- `runtime`, `syscall`, `time`
+- `sort`, `strings`
 
-- `total_impressions`
-- `total_clicks`
-- `total_spend`
-- `total_conversions`
-- `CTR` = total_clicks / total_impressions  
-- `CPA` = total_spend / total_conversions  
-  - If conversions = 0, ignore or return `null` for CPA
+## Processing Strategy
 
----
+Luồng xử lý chính:
 
-## 2. Generate two result lists
+1. Đọc file CSV theo streaming (line by line), không load toàn bộ file vào memory.
+2. Parse từng record và chuẩn hóa số liệu ngay lúc đọc.
+3. Aggregate trực tiếp vào map theo `campaign_id` trong lúc parsing.
+4. Sau khi đọc xong mới tính CTR/CPA và lấy top 10.
+5. Ghi CSV output.
 
-### **A. Top 10 campaigns with the highest CTR**
+## Bottleneck Và Quyết Định Tối Ưu
 
-Output as CSV format.
+Bottleneck lớn nhất của bài toán là **đọc + parse file CSV dung lượng lớn**.  
+Nếu parse xong mới gom nhóm ở một pass khác thì sẽ tốn thêm CPU cycles và tăng memory pressure do phải giữ dữ liệu trung gian.
 
-**Expected output format (`top10_ctr.csv`):**
+Vì vậy mình chọn:
 
-| campaign_id | total_impressions | total_clicks | total_spend | total_conversions | CTR    | CPA   |
-|-------------|-------------------|--------------|-------------|-------------------|--------|-------|
-| CMP042      | 125000            | 6250         | 12500.50    | 625               | 0.0500 | 20.00 |
-| CMP015      | 340000            | 15300        | 30600.25    | 1530              | 0.0450 | 20.00 |
-| CMP008      | 890000            | 35600        | 71200.75    | 3560              | 0.0400 | 20.00 |
-| CMP023      | 445000            | 15575        | 31150.00    | 1557              | 0.0350 | 20.00 |
-| CMP031      | 670000            | 20100        | 40200.50    | 2010              | 0.0300 | 20.00 |
+- **Đọc file nhanh bằng memory-mapped I/O (`mmap`)** để giảm overhead syscall/read loop so với đọc từng chunk nhỏ.
+- **Chia dữ liệu theo chunk và parse song song theo số core** (`workers ~= GOMAXPROCS`), mỗi worker xử lý một vùng byte độc lập theo ranh giới dòng.
+- **Parsing nhanh theo byte-level scanner** (`parseLineToCompactTrusted`) thay vì parser CSV tổng quát, vì input format cố định và sạch.
+- **Lưu tiền ở đơn vị cents (`int64`)** để tránh chi phí float khi parse và cộng dồn.
+- **Aggregate ngay trong lúc parsing** (single pass), không tạo slice record trung gian.
+- **Dùng local aggregator per worker rồi merge cuối** để giảm contention/lock trong hot path.
 
-### **B. Top 10 campaigns with the lowest CPA**
+Lợi ích:
 
-Output as CSV format. Exclude campaigns with zero conversions.
+- Tăng throughput đọc + parse trên file lớn.
+- Giảm CPU cycles do bỏ bớt lớp parse/convert dư thừa.
+- Giảm allocation, giảm GC pressure, giữ peak memory thấp.
 
-**Expected output format (`top10_cpa.csv`):**
+## Benchmark Report (1GB dataset)
 
-| campaign_id | total_impressions | total_clicks | total_spend | total_conversions | CTR    | CPA   |
-|-------------|-------------------|--------------|-------------|-------------------|--------|-------|
-| CMP007      | 450000            | 13500        | 13500.00    | 1350              | 0.0300 | 10.00 |
-| CMP019      | 780000            | 23400        | 23400.00    | 2340              | 0.0300 | 10.00 |
-| CMP033      | 290000            | 8700         | 10440.00    | 870               | 0.0300 | 12.00 |
-| CMP012      | 560000            | 16800        | 21840.00    | 1680              | 0.0300 | 13.00 |
-| CMP025      | 320000            | 9600         | 13440.00    | 960               | 0.0300 | 14.00 |
+Command:
 
----
+```bash
+cd src
+go run . -runs=10 -warmup=10
+```
 
-## 3. Technical Requirements
+Machine/runtime:
 
-- The file is large (~1GB).  
-   **Your solution must handle large datasets efficiently with good performance and memory optimization.**
-- The program should be runnable via CLI, for example: `python aggregator.py --input ad_data.csv --output results/`
+- `go=go1.25.7`
+- `os=darwin`, `arch=arm64`
+- `cpu_model=Apple M1 Max`
+- `cpus=10`, `gomaxprocs=10`
 
----
+Measured result:
 
-# 📬 Submission Instructions
+- Time: `best=199ms`, `avg=207ms`, `median=207ms`, `p95=213ms`, `worst=214ms`, `jitter=7.1%`
+- CPU: `cpu_avg=881.6%`, `cpu_median=876.5%`, `cpu_p95=919.5%`, `cpu_max=919.9%`, `cpu_per_core_avg=88.2%`
+- Memory: `peak_alloc=4.04 MiB`, `peak_heap_inuse=4.54 MiB`
 
-Please submit your **GitHub repository link** via email to: **backoffice@flinters.vn**
+## Notes
 
-Your repository should include:
-
-1. **Source code** in a GitHub repository  
-2. Output result files:
-   - `top10_ctr.csv`
-   - `top10_cpa.csv`
-3. A **README.md** including:
-   - Setup instructions  
-   - How to run the program  
-   - Libraries used  
-   - Processing time for the 1GB file  
-   - Peak memory usage (if measured)
-4. *(Optional but recommended)*  
-   - Dockerfile  
-   - Benchmark logs  
-5. **(If used) `PROMPTS.md`** — see [AI Coding Assistants](#-ai-coding-assistants) section below
-
----
-
-## ✅ Code Quality Expectations
-
-Please write your code carefully. We expect:
-
-- **Correct results** — output must match expected values precisely
-- **Clean, readable code** — meaningful names, consistent style, no dead code or commented-out blocks
-- **Error handling** — handle missing files, malformed rows, and edge cases gracefully
-- **Performance awareness** — the input is ~1GB; your solution must be memory-efficient
-- **Tests** — include tests to verify your solution's correctness
-- **Documented decisions** — briefly explain non-obvious choices in your README
-
-
----
-
-## 🤖 AI Coding Assistants
-
-**We encourage you to use AI coding assistants** such as GitHub Copilot, Claude (Cursor AI, Cline), ChatGPT, or any other AI tools you prefer!
-
-### **If you use AI coding assistants:**
-Please include a **`PROMPTS.md`** file in the root of your repository. This helps us understand:
-- How you break down problems
-- Your communication with AI tools
-- Your problem-solving approach
-
-**Requirements for `PROMPTS.md`:**
-- Must be a file named exactly `PROMPTS.md` (no other format accepted)
-- Paste your prompts **as-is** — raw, unedited, exactly as you typed them
-- Do **not** clean up, polish, or rewrite your prompts before submitting
-
-This is **not mandatory** but **highly valued** as it demonstrates your ability to effectively leverage modern development tools.
-
----
-
-Good luck, and happy coding!
+- App có log benchmark chi tiết theo từng run và summary cuối.
+- Có thể thay đổi `-runs`/`-warmup` để lấy số đo ổn định hơn tùy môi trường máy.

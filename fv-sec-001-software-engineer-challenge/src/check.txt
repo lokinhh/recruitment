@@ -1,0 +1,40 @@
+Personal note - performance flow
+
+Baseline trước: viết bản parse/read đơn giản để đo.
+   - test nhanh data shape:
+     ad_data_test.go:33: campaign_id,date,impressions,clicks,spend,conversions
+     ad_data_test.go:33: CMP025,2025-04-18,3653,60,64.29,2
+     ad_data_test.go:33: CMP020,2025-05-03,24465,764,1394.62,42
+     ad_data_test.go:33: CMP019,2025-02-05,7214,236,135.93,21
+     ad_data_test.go:33: CMP046,2025-06-04,10631,201,298.82,18
+
+Benchmark bản baseline:
+   go test -bench=BenchmarkReadParseFullFile -benchtime=1x -benchmem ./test
+   =>
+   goos: darwin
+   goarch: arm64
+   pkg: fv-sec-001/ad-aggregator/test
+   cpu: Apple M1 Max
+   BenchmarkReadParseFullFile-10  1  5185768000 ns/op  1001005560 B/op  26843610 allocs/op
+   PASS
+   ok fv-sec-001/ad-aggregator/test 5.591s
+
+Observation:
+   - Time quá lớn + allocations quá cao.
+   - Trong khi business logic (aggregate + top10) khá nhẹ.
+   => bottleneck chính là read + parse CSV.
+
+Research hướng xử lý:
+   - Đổi sang mmap để giảm overhead read/syscall loop.
+   - Parse theo byte scanner cho format cố định (trusted input)(fixed-size row).
+   - Aggregate luôn lúc parsing (single pass), không giữ record trung gian.
+   - Chia chunk theo line boundary, xử lý song song theo số core.
+   - Mỗi worker giữ local aggregate, cuối cùng merge.
+   - cố gắng xử lý theo hướng non-blocking (dùng sharding goroutine).
+   - local aggregate per worker + merge cuối để giảm contention và tránh data race
+
+Kết quả sau khi đổi hướng:
+   go run . -runs=10 -warmup=10
+   benchmark: runs=10 best=199ms avg=207ms median=207ms p95=213ms worst=214ms jitter=7.1% | cpu_avg=881.6% cpu_median=876.5% cpu_p95=919.5% cpu_max=919.9% cpu_per_core_avg=88.2% | peak_alloc=4.04 MiB | peak_heap_inuse=4.54 MiB
+
+data-of-truth theo đề bài (không tập trung hardening cho malformed rows)
